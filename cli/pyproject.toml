@@ -1,0 +1,17 @@
+[project]
+name = "comfyci"
+version = "0.1.0"
+description = "CLI tool for running ComfyUI test workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.0",
+    "websocket-client>=1.6.0",
+]
+
+[project.scripts]
+comfyci = "comfyci:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

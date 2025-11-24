@@ -4,6 +4,10 @@ from comfy_api.latest import ComfyExtension, io
 from .nodes import TestImageGenerator, TestMustExecute, TestEqual, TestDefinition
 
 
+# Register web directory for frontend extensions
+WEB_DIRECTORY = "web"
+
+
 class TestFrameworkExtension(ComfyExtension):
     """Extension for testing framework nodes"""
 

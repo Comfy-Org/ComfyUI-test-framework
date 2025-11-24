@@ -1,6 +1,7 @@
 from typing import Any
 
-from comfy_api.latest import io, ui
+from comfy_api.v0_0_2 import io, ui, ComfyAPISync
+from server import PromptServer
 import torch
 from pathlib import Path
 
@@ -282,4 +283,184 @@ class TestDefinition(io.ComfyNode):
         """Store test definition metadata"""
         # This node just accepts the metadata and does nothing with it during execution
         # The actual test framework would read this metadata from the workflow
+        return io.NodeOutput()
+
+
+class TestImageMatch(io.ComfyNode):
+    """Output node that validates image against perceptual hash"""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="TestImageMatch",
+            display_name="Test Image Match",
+            category="testing",
+            description="Compare image against perceptual hash and fail if difference exceeds threshold",
+            inputs=[
+                io.Image.Input("image"),
+                io.String.Input(
+                    "perceptual_hash",
+                    default="",
+                    multiline=False,
+                ),
+                io.Float.Input(
+                    "delta",
+                    default=0.05,
+                    min=0.0,
+                    max=1.0,
+                    step=0.01,
+                    display_mode=io.NumberDisplay.slider
+                ),
+                io.Combo.Input(
+                    "hash_function",
+                    options=["dhash"],
+                    default="dhash"
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+        )
+
+    @classmethod
+    def _calculate_dhash(cls, image_tensor: torch.Tensor, hash_size: int = 8) -> str:
+        """
+        Calculate difference hash (dHash) using minimal dependencies
+
+        Args:
+            image_tensor: ComfyUI IMAGE format [B,H,W,C]
+            hash_size: Size of hash grid (8 = 64-bit hash)
+
+        Returns:
+            Binary string representing the hash
+        """
+        from PIL import Image
+        import numpy as np
+
+        # Convert first image in batch to PIL Image
+        img_np = (image_tensor[0].cpu().numpy() * 255).astype(np.uint8)
+        img = Image.fromarray(img_np)
+
+        # Convert to grayscale and resize to hash_size+1 x hash_size
+        # We need one extra column to calculate horizontal differences
+        img = img.convert('L').resize((hash_size + 1, hash_size), Image.Resampling.LANCZOS)
+        pixels = np.array(img)
+
+        # Calculate horizontal gradients (compare each pixel with its right neighbor)
+        diff = pixels[:, 1:] > pixels[:, :-1]
+
+        # Convert boolean array to binary string
+        return ''.join(['1' if d else '0' for row in diff for d in row])
+
+    @classmethod
+    def _compare_hashes(cls, hash1: str, hash2: str) -> float:
+        """
+        Compare two hashes using Hamming distance
+
+        Args:
+            hash1: First hash string
+            hash2: Second hash string
+
+        Returns:
+            Difference as a float between 0.0 (identical) and 1.0 (completely different)
+        """
+        if not hash1 or not hash2:
+            return 1.0  # Maximum difference if either is empty
+
+        if len(hash1) != len(hash2):
+            raise ValueError(f"Hash length mismatch: {len(hash1)} vs {len(hash2)}")
+
+        # Calculate Hamming distance (number of differing bits)
+        differences = sum(c1 != c2 for c1, c2 in zip(hash1, hash2))
+
+        # Return as normalized difference (0.0 to 1.0)
+        return differences / len(hash1)
+
+    @classmethod
+    def execute(
+        cls,
+        image: torch.Tensor,
+        perceptual_hash: str,
+        delta: float,
+        hash_function: str,
+    ) -> io.NodeOutput:
+        """Validate image against perceptual hash"""
+
+        # Calculate hash based on selected function
+        if hash_function == "dhash":
+            calculated_hash = cls._calculate_dhash(image)
+        else:
+            raise ValueError(f"Unknown hash function: {hash_function}")
+
+        # If no expected hash provided, just show the calculated hash
+        if not perceptual_hash or perceptual_hash.strip() == "":
+            # Send preview image
+            api_sync = ComfyAPISync()
+            api_sync.execution.set_progress(
+                value=1.0,
+                max_value=1.0,
+                preview_image=image
+            )
+
+            # Send calculated hash as text
+            PromptServer.instance.send_progress_text(
+                calculated_hash,
+                cls.hidden.unique_id
+            )
+
+            return io.NodeOutput()
+
+        # Compare hashes
+        difference = cls._compare_hashes(calculated_hash, perceptual_hash)
+
+        # Check if difference exceeds threshold
+        if difference > delta:
+            hamming_distance = int(difference * len(calculated_hash))
+
+            # Send preview image BEFORE throwing error
+            api_sync = ComfyAPISync()
+            api_sync.execution.set_progress(
+                value=1.0,
+                max_value=1.0,
+                preview_image=image
+            )
+
+            # Send error details as text BEFORE throwing error
+            error_message = (
+                f"❌ Image hash mismatch!\n"
+                f"Difference: {difference:.4f} > threshold: {delta:.4f}\n"
+                f"Expected: {perceptual_hash}\n"
+                f"Actual:   {calculated_hash}\n"
+                f"Hamming distance: {hamming_distance} bits out of {len(calculated_hash)}"
+            )
+
+            PromptServer.instance.send_progress_text(
+                error_message,
+                cls.hidden.unique_id
+            )
+
+            # NOW throw the error - previews already sent
+            raise ValueError(error_message)
+
+        # Success - send preview image
+        api_sync = ComfyAPISync()
+        api_sync.execution.set_progress(
+            value=1.0,
+            max_value=1.0,
+            preview_image=image
+        )
+
+        # Send success message with hash details
+        success_text = (
+            f"✅ Test Passed\n"
+            f"Hash: {calculated_hash}\n"
+            f"Difference: {difference:.4f} (threshold: {delta:.4f})"
+        )
+
+        PromptServer.instance.send_progress_text(
+            success_text,
+            cls.hidden.unique_id
+        )
+
+        # Return empty output (previews already sent)
         return io.NodeOutput()

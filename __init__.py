@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from comfy_api.latest import ComfyExtension, io
-from .nodes import TestImageGenerator, TestMustExecute, TestEqual, TestDefinition
+from .nodes import TestImageGenerator, TestMustExecute, TestEqual, TestDefinition, TestImageMatch
 
 
 # Register web directory for frontend extensions
@@ -18,6 +18,7 @@ class TestFrameworkExtension(ComfyExtension):
             TestMustExecute,
             TestEqual,
             TestDefinition,
+            TestImageMatch,
         ]
 
 

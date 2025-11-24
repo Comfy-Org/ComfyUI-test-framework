@@ -58,9 +58,16 @@ def parse_workflow_file(file_path: Path) -> WorkflowTest:
     """
     try:
         with open(file_path, 'r') as f:
-            workflow = json.load(f)
+            workflow_json = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
         raise ValueError(f"Failed to parse {file_path}: {e}")
+
+    # Extract API-format workflow if it exists in the "api" key
+    # Otherwise, assume the entire JSON is already in API format
+    if isinstance(workflow_json, dict) and "api" in workflow_json:
+        workflow = workflow_json["api"]
+    else:
+        workflow = workflow_json
 
     if not isinstance(workflow, dict):
         raise ValueError(f"Invalid workflow format in {file_path}: expected object")

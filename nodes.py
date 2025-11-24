@@ -435,7 +435,7 @@ class TestImageMatch(io.ComfyNode):
             )
 
             PromptServer.instance.send_progress_text(
-                error_message,
+                calculated_hash,
                 cls.hidden.unique_id
             )
 

@@ -125,7 +125,7 @@ class TestImageGenerator(io.ComfyNode):
 
 
 class TestMustExecute(io.ComfyNode):
-    """Output node that accepts any input and does nothing with it"""
+    """Pass-through node that accepts any input and returns it unchanged"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -133,19 +133,20 @@ class TestMustExecute(io.ComfyNode):
             node_id="TestMustExecute",
             display_name="Test Must Execute",
             category="testing",
-            description="Output node that forces execution but does nothing",
+            description="Pass-through node that returns its input unchanged",
             inputs=[
                 io.AnyType.Input("input"),
             ],
-            outputs=[],
-            is_output_node=True,
+            outputs=[
+                io.AnyType.Output("output"),
+            ],
+            is_output_node=False,
         )
 
     @classmethod
     def execute(cls, input: Any) -> io.NodeOutput:
-        """Accept any input and do nothing with it"""
-        # Output nodes don't return anything
-        return io.NodeOutput()
+        """Accept any input and return it unchanged"""
+        return io.NodeOutput(input)
 
 
 class TestEqual(io.ComfyNode):

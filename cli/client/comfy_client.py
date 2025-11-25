@@ -131,8 +131,6 @@ class ComfyClient:
                     headers = []
                     for key, value in self._auth.get_headers().items():
                         headers.append(f"{key}: {value}")
-                    print(f"[DEBUG] WS connecting to {ws_url}")
-                    print(f"[DEBUG] WS headers: {headers}")
 
                 ws.connect(ws_url, header=headers)
                 self._ws = ws
@@ -154,17 +152,12 @@ class ComfyClient:
             self._ws = None
         self._connected = False
 
-    def _get_headers(self, debug: bool = False) -> dict[str, str]:
+    def _get_headers(self) -> dict[str, str]:
         """Get request headers including auth if available."""
         headers = {"Content-Type": "application/json"}
         if self._auth:
             self._auth.ensure_valid(self._base_url())
-            auth_headers = self._auth.get_headers()
-            if debug:
-                print(f"[DEBUG] Auth headers: {list(auth_headers.keys())}")
-                if "Cookie" in auth_headers:
-                    print(f"[DEBUG] Cookie: {auth_headers['Cookie'][:100]}...")
-            headers.update(auth_headers)
+            headers.update(self._auth.get_headers())
         return headers
 
     def _http_request(

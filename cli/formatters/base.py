@@ -1,10 +1,8 @@
 """Abstract base class for output formatters."""
 
-from abc import ABC, abstractmethod
-from typing import List
-
-import sys
 import os
+import sys
+from abc import ABC, abstractmethod
 
 
 class OutputFormatter(ABC):

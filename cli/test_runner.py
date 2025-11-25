@@ -3,9 +3,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Set
 
-from comfy_client import ComfyClient, TestExecution
+from client import ComfyClient, TestExecution
 from workflow_parser import WorkflowTest
 
 
@@ -22,9 +21,9 @@ class TestResult:
     """Result of a single test execution."""
     test: WorkflowTest
     status: TestStatus
-    execution: Optional[TestExecution] = None
-    error_message: Optional[str] = None
-    skipped_reason: Optional[str] = None
+    execution: TestExecution | None = None
+    error_message: str | None = None
+    skipped_reason: str | None = None
 
     @property
     def passed(self) -> bool:
@@ -43,11 +42,11 @@ class ExecutionStrategy(ABC):
     @abstractmethod
     def execute_tests(
         self,
-        tests: List[WorkflowTest],
+        tests: list[WorkflowTest],
         client: ComfyClient,
         verbose: bool = False,
         failfast: bool = False,
-    ) -> List[TestResult]:
+    ) -> list[TestResult]:
         """
         Execute a list of tests.
 
@@ -68,11 +67,11 @@ class SequentialExecutor(ExecutionStrategy):
 
     def execute_tests(
         self,
-        tests: List[WorkflowTest],
+        tests: list[WorkflowTest],
         client: ComfyClient,
         verbose: bool = False,
         failfast: bool = False,
-    ) -> List[TestResult]:
+    ) -> list[TestResult]:
         """Execute tests sequentially."""
         results = []
 
@@ -86,7 +85,7 @@ class SequentialExecutor(ExecutionStrategy):
             # Stop on first failure if failfast is enabled
             if failfast and result.failed:
                 if verbose:
-                    print(f"\nStopping due to failure (--failfast)")
+                    print("\nStopping due to failure (--failfast)")
                 break
 
         return results
@@ -117,7 +116,7 @@ class SequentialExecutor(ExecutionStrategy):
             )
 
             # Check for execution errors
-            if execution.has_error:
+            if execution.has_error and execution.error is not None:
                 error_data = execution.error
                 error_type = error_data.get('exception_type', 'Unknown')
                 error_msg = error_data.get('exception_message', 'No message')
@@ -167,7 +166,7 @@ class SequentialExecutor(ExecutionStrategy):
         self,
         test: WorkflowTest,
         execution: TestExecution,
-    ) -> Set[str]:
+    ) -> set[str]:
         """
         Find TestMustExecute nodes that were not executed.
 
@@ -201,11 +200,11 @@ class TestRunner:
 
     def run(
         self,
-        tests: List[WorkflowTest],
+        tests: list[WorkflowTest],
         client: ComfyClient,
         verbose: bool = False,
         failfast: bool = False,
-    ) -> List[TestResult]:
+    ) -> list[TestResult]:
         """
         Run tests using the configured strategy.
 

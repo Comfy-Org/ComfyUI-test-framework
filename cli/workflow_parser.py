@@ -3,7 +3,6 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set
 
 
 @dataclass
@@ -19,9 +18,10 @@ class TestMetadata:
 class WorkflowTest:
     """Represents a single test workflow with its metadata."""
     file_path: Path
-    workflow: Dict
-    metadata: Optional[TestMetadata]
-    test_must_execute_nodes: Set[str]
+    workflow: dict
+    metadata: TestMetadata | None
+    test_must_execute_nodes: set[str]
+    _custom_timeout: int | None = None
 
     @property
     def name(self) -> str:
@@ -37,7 +37,9 @@ class WorkflowTest:
 
     @property
     def timeout(self) -> int:
-        """Get timeout in seconds (base + extra time)."""
+        """Get timeout in seconds (base + extra time, or custom override)."""
+        if self._custom_timeout is not None:
+            return self._custom_timeout
         base_timeout = 120  # 2 minutes default
         extra = self.metadata.extra_time if self.metadata else 0
         return base_timeout + extra
@@ -57,10 +59,10 @@ def parse_workflow_file(file_path: Path) -> WorkflowTest:
         ValueError: If file cannot be parsed
     """
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             workflow_json = json.load(f)
     except (json.JSONDecodeError, OSError) as e:
-        raise ValueError(f"Failed to parse {file_path}: {e}")
+        raise ValueError(f"Failed to parse {file_path}: {e}") from e
 
     # Extract API-format workflow if it exists in the "api" key
     # Otherwise, assume the entire JSON is already in API format
@@ -74,7 +76,7 @@ def parse_workflow_file(file_path: Path) -> WorkflowTest:
 
     # Extract TestDefinition metadata
     metadata = None
-    for node_id, node_data in workflow.items():
+    for _node_id, node_data in workflow.items():
         if not isinstance(node_data, dict):
             continue
 
@@ -106,7 +108,7 @@ def parse_workflow_file(file_path: Path) -> WorkflowTest:
     )
 
 
-def discover_tests(patterns: List[str], base_path: Optional[Path] = None) -> List[WorkflowTest]:
+def discover_tests(patterns: list[str], base_path: Path | None = None) -> list[WorkflowTest]:
     """
     Discover test workflow files matching the given patterns.
 

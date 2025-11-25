@@ -1,25 +1,42 @@
 #!/usr/bin/env -S uv run
 """ComfyCI - CLI tool for running ComfyUI test workflows."""
 
+import subprocess
 import sys
-from pathlib import Path
-from typing import List
 
 import click
 
-from comfy_client import ComfyClient
-from workflow_parser import discover_tests, WorkflowTest
-from test_runner import TestRunner, SequentialExecutor, TestStatus
+from client import ServerUnreachableError, create_client
 from formatters import SimpleFormatter
+from test_runner import SequentialExecutor, TestRunner, TestStatus
+from workflow_parser import discover_tests
+
+
+def get_op_secret(op_exe: str, entry: str, field: str) -> str:
+    """Fetch a secret from 1Password CLI."""
+    ref = f"op://{entry}/{field}"
+    result = subprocess.run(
+        [op_exe, "read", ref],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
 
 
 @click.command()
 @click.argument('patterns', nargs=-1, required=True)
 @click.option(
-    '--target',
+    '--server',
     default='localhost:8188',
+    envvar='COMFY_SERVER',
     help='ComfyUI server address (host:port)',
     show_default=True,
+)
+@click.option(
+    '--ssl',
+    is_flag=True,
+    help='Use HTTPS/WSS for server connection',
 )
 @click.option(
     '--cpu',
@@ -46,14 +63,28 @@ from formatters import SimpleFormatter
     is_flag=True,
     help='Disable colored output',
 )
+@click.option(
+    '--op-exe',
+    default='op.exe',
+    help='1Password CLI executable (op or op.exe)',
+    show_default=True,
+)
+@click.option(
+    '--op-entry',
+    default=None,
+    help='1Password entry path (e.g., Employee/TestCI). Fetches email, password, FIREBASE_API_KEY.',
+)
 def main(
     patterns: tuple,
-    target: str,
+    server: str,
+    ssl: bool,
     cpu: bool,
     verbose: bool,
     failfast: bool,
-    timeout: int,
+    timeout: int | None,
     no_color: bool,
+    op_exe: str,
+    op_entry: str | None,
 ):
     """
     Run ComfyUI test workflows.
@@ -62,7 +93,7 @@ def main(
 
     Examples:
 
-        comfyci ./tests/**/*.json --target localhost:8188
+        comfyci ./tests/**/*.json --server localhost:8188
 
         comfyci test1.json test2.json --cpu --verbose
 
@@ -106,17 +137,37 @@ def main(
 
         # Connect to ComfyUI
         if verbose:
-            print(f"Connecting to ComfyUI at {target}...")
+            print(f"Connecting to ComfyUI at {server}...")
 
-        client = ComfyClient(server_address=target)
+        # Fetch credentials from 1Password if --op-entry is provided
+        if op_entry:
+            if verbose:
+                print(f"Fetching credentials from 1Password ({op_entry})...")
+            try:
+                email = get_op_secret(op_exe, op_entry, "email")
+                password = get_op_secret(op_exe, op_entry, "password")
+                api_key = get_op_secret(op_exe, op_entry, "FIREBASE_API_KEY")
+                client = create_client(
+                    server,
+                    use_ssl=ssl,
+                    email=email,
+                    password=password,
+                    api_key=api_key,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error fetching credentials from 1Password: {e.stderr}", file=sys.stderr)
+                print(f"Make sure you're signed in to 1Password ({op_exe})", file=sys.stderr)
+                sys.exit(1)
+        else:
+            client = create_client(server, use_ssl=ssl)
 
         try:
             client.connect()
             if verbose:
-                print(f"Connected successfully\n")
-        except ConnectionError as e:
+                print("Connected successfully\n")
+        except ServerUnreachableError as e:
             print(f"Error: {e}", file=sys.stderr)
-            print(f"\nMake sure ComfyUI is running at {target}", file=sys.stderr)
+            print(f"\nMake sure ComfyUI is running at {server}", file=sys.stderr)
             sys.exit(1)
 
         # Run tests

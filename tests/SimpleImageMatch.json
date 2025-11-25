@@ -1,0 +1,233 @@
+{
+  "id": "8c1d51d2-332e-4330-b601-7496c67102ea",
+  "revision": 0,
+  "last_node_id": 6,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "TestDefinition",
+      "pos": [
+        273.51099300713236,
+        344.9440727920552
+      ],
+      "size": [
+        443.9322916666667,
+        224.296875
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "TestDefinition"
+      },
+      "widgets_values": [
+        "",
+        "",
+        false,
+        0
+      ]
+    },
+    {
+      "id": 3,
+      "type": "TestMustExecute",
+      "pos": [
+        400.9465591976717,
+        859.3878354234148
+      ],
+      "size": [
+        187.48697916666669,
+        34.54427083333334
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "input",
+          "type": "*",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "*",
+          "type": "*",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TestMustExecute"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "TestImageMatch",
+      "pos": [
+        850.5082318327758,
+        771.9714492040357
+      ],
+      "size": [
+        345.5078125,
+        514.9348958333334
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "TestImageMatch"
+      },
+      "widgets_values": [
+        "0001110100100100000010001000000100101011011010100000101001000100",
+        0.05,
+        "dhash",
+        {
+          "name": "Accept Hash",
+          "options": {
+            "serialize": false
+          },
+          "type": "button",
+          "y": 98,
+          "last_y": 98,
+          "computedDisabled": false,
+          "clicked": false,
+          "computedHeight": 24
+        },
+        "✅ Test Passed\nHash: 0001010100100100000010001000000100101011011010100000101001000100\nDifference: 0.0156 (threshold: 0.0500)"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "TestImageGenerator",
+      "pos": [
+        -286.8847995693364,
+        803.8408357186105
+      ],
+      "size": [
+        235.1171875,
+        197.1484375
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "Image",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TestImageGenerator"
+      },
+      "widgets_values": [
+        "noise",
+        512,
+        512,
+        2,
+        "fixed"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "*"
+    ],
+    [
+      2,
+      3,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.1727445999735333,
+      "offset": [
+        601.1850248737014,
+        -253.5158684848377
+      ]
+    },
+    "workflowRendererVersion": "LG",
+    "frontendVersion": "1.33.8"
+  },
+  "version": 0.4,
+  "api": {
+    "1": {
+      "inputs": {
+        "name": "",
+        "description": "",
+        "requiresGPU": false,
+        "extraTime": 0
+      },
+      "class_type": "TestDefinition",
+      "_meta": {
+        "title": "Test Definition"
+      }
+    },
+    "2": {
+      "inputs": {
+        "image_type": "noise",
+        "width": 512,
+        "height": 512,
+        "seed": 2
+      },
+      "class_type": "TestImageGenerator",
+      "_meta": {
+        "title": "Test Image Generator"
+      }
+    },
+    "3": {
+      "inputs": {
+        "input": [
+          "2",
+          0
+        ]
+      },
+      "class_type": "TestMustExecute",
+      "_meta": {
+        "title": "Test Must Execute"
+      }
+    },
+    "4": {
+      "inputs": {
+        "perceptual_hash": "0001110100100100000010001000000100101011011010100000101001000100",
+        "delta": 0.05,
+        "hash_function": "dhash",
+        "image": [
+          "3",
+          0
+        ]
+      },
+      "class_type": "TestImageMatch",
+      "_meta": {
+        "title": "Test Image Match"
+      }
+    }
+  }
+}

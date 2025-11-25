@@ -39,6 +39,11 @@ def get_op_secret(op_exe: str, entry: str, field: str) -> str:
     help='Use HTTPS/WSS for server connection',
 )
 @click.option(
+    '--cloud',
+    is_flag=True,
+    help='Use Comfy Cloud API (e.g., /jobs instead of /history)',
+)
+@click.option(
     '--cpu',
     is_flag=True,
     help='Skip tests that require GPU',
@@ -78,6 +83,7 @@ def main(
     patterns: tuple,
     server: str,
     ssl: bool,
+    cloud: bool,
     cpu: bool,
     verbose: bool,
     failfast: bool,
@@ -150,6 +156,7 @@ def main(
                 client = create_client(
                     server,
                     use_ssl=ssl,
+                    cloud=cloud,
                     email=email,
                     password=password,
                     api_key=api_key,
@@ -159,7 +166,7 @@ def main(
                 print(f"Make sure you're signed in to 1Password ({op_exe})", file=sys.stderr)
                 sys.exit(1)
         else:
-            client = create_client(server, use_ssl=ssl)
+            client = create_client(server, use_ssl=ssl, cloud=cloud)
 
         try:
             client.connect()

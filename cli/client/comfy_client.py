@@ -40,6 +40,7 @@ class ComfyClient:
         *,
         use_ssl: bool = False,
         client_id: str | None = None,
+        cloud: bool = False,
         # Optional Firebase authentication
         email: str | None = None,
         password: str | None = None,
@@ -52,6 +53,7 @@ class ComfyClient:
             server_address: Server address as "host:port" or "host" (default port 8188)
             use_ssl: Use HTTPS/WSS instead of HTTP/WS
             client_id: Custom client ID (auto-generated if not provided)
+            cloud: Use Comfy Cloud API (e.g., /jobs instead of /history)
             email: Firebase email (for authenticated servers)
             password: Firebase password (for authenticated servers)
             api_key: Firebase API key (for authenticated servers)
@@ -66,6 +68,7 @@ class ComfyClient:
 
         self._use_ssl = use_ssl
         self._client_id = client_id or str(uuid.uuid4())
+        self._cloud = cloud
 
         # Setup optional authentication
         self._auth: FirebaseAuth | None = None
@@ -204,8 +207,14 @@ class ComfyClient:
 
     def get_history(self, prompt_id: str) -> dict[str, Any]:
         """Get execution history for a prompt."""
-        result = self._http_request("GET", f"/history/{prompt_id}")
-        return result.get(prompt_id, {})
+        if self._cloud:
+            # Comfy Cloud uses /jobs/{job_id} instead of /history/{prompt_id}
+            result = self._http_request("GET", f"/jobs/{prompt_id}")
+            # JobDetailResponse has outputs at top level
+            return result
+        else:
+            result = self._http_request("GET", f"/history/{prompt_id}")
+            return result.get(prompt_id, {})
 
     def get_queue(self) -> QueueInfo:
         """Get queue status."""

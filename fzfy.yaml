@@ -1,0 +1,3 @@
+entries:
+  - name: "Run Tests on Local Cloud"
+    command: ./comfyci.py ../tests/*.json --server localhost:8080 --op-exe op.exe --op-entry Employee/TestCI -v --cloud

@@ -26,6 +26,7 @@ def create_client(
     server_address: str | None = None,
     *,
     use_ssl: bool = False,
+    cloud: bool = False,
     email: str | None = None,
     password: str | None = None,
     api_key: str | None = None,
@@ -36,6 +37,7 @@ def create_client(
     Args:
         server_address: Server address (host:port). Defaults to localhost:8188
         use_ssl: Use HTTPS/WSS
+        cloud: Use Comfy Cloud API (e.g., /jobs instead of /history)
         email: Firebase email (or from COMFY_CLOUD_EMAIL env var)
         password: Firebase password (or from COMFY_CLOUD_PASSWORD env var)
         api_key: Firebase API key (or from FIREBASE_API_KEY env var)
@@ -48,12 +50,13 @@ def create_client(
         client = create_client("localhost:8188")
 
         # Cloud with env vars
-        client = create_client("cloud.comfy.org", use_ssl=True)
+        client = create_client("cloud.comfy.org", use_ssl=True, cloud=True)
 
         # Cloud with explicit credentials
         client = create_client(
             "cloud.comfy.org",
             use_ssl=True,
+            cloud=True,
             email="user@example.com",
             password="secret",
             api_key="firebase-key"
@@ -71,6 +74,7 @@ def create_client(
     return ComfyClient(
         server_address=server_address,
         use_ssl=use_ssl,
+        cloud=cloud,
         email=email,
         password=password,
         api_key=api_key,

@@ -35,16 +35,16 @@ app.registerExtension({
 });
 
 /**
- * TestImageMatch Accept Button Extension
+ * AssertImageMatch Accept Button Extension
  *
- * Adds an "Accept Hash" button to TestImageMatch nodes that copies the
+ * Adds an "Accept Hash" button to AssertImageMatch nodes that copies the
  * calculated perceptual hash into the perceptual_hash input field.
  */
 app.registerExtension({
     name: "comfyui.test.framework.image.match.accept",
 
     async nodeCreated(node) {
-        if (node.comfyClass === "TestImageMatch") {
+        if (node.comfyClass === "AssertImageMatch") {
             // Add "Accept Hash" button
             const acceptButton = node.addWidget(
                 "button",

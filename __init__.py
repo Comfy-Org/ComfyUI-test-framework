@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from comfy_api.latest import ComfyExtension, io
-from .nodes import TestImageGenerator, TestMustExecute, TestEqual, TestDefinition, TestImageMatch
+from .nodes import (
+    TestImageGenerator,
+    TestDefinition,
+    AssertExecuted,
+    AssertEqual,
+    AssertNotEqual,
+    AssertImageMatch,
+    AssertContainsColor,
+    AssertTensorShape,
+    AssertInRange,
+)
 
 
 # Register web directory for frontend extensions
@@ -14,11 +24,17 @@ class TestFrameworkExtension(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         """Return all test framework nodes"""
         return [
+            # Utilities
             TestImageGenerator,
-            TestMustExecute,
-            TestEqual,
             TestDefinition,
-            TestImageMatch,
+            # Assertions
+            AssertExecuted,
+            AssertEqual,
+            AssertNotEqual,
+            AssertImageMatch,
+            AssertContainsColor,
+            AssertTensorShape,
+            AssertInRange,
         ]
 
 

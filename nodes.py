@@ -125,16 +125,16 @@ class TestImageGenerator(io.ComfyNode):
         return io.NodeOutput(image)
 
 
-class TestMustExecute(io.ComfyNode):
-    """Pass-through node that accepts any input and returns it unchanged"""
+class AssertExecuted(io.ComfyNode):
+    """Pass-through node that marks a value as requiring execution (not cached)"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="TestMustExecute",
-            display_name="Test Must Execute",
+            node_id="AssertExecuted",
+            display_name="Assert Executed",
             category="testing",
-            description="Pass-through node that returns its input unchanged",
+            description="Pass-through node that verifies execution occurred (not cached)",
             inputs=[
                 io.AnyType.Input("input"),
             ],
@@ -150,14 +150,14 @@ class TestMustExecute(io.ComfyNode):
         return io.NodeOutput(input)
 
 
-class TestEqual(io.ComfyNode):
+class AssertEqual(io.ComfyNode):
     """Output node that checks if two inputs are equal"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="TestEqual",
-            display_name="Test Equal",
+            node_id="AssertEqual",
+            display_name="Assert Equal",
             category="testing",
             description="Checks if two inputs are equal, throws error if not",
             inputs=[
@@ -165,6 +165,7 @@ class TestEqual(io.ComfyNode):
                 io.AnyType.Input("input2"),
             ],
             outputs=[],
+            hidden=[io.Hidden.unique_id],
             is_output_node=True,
         )
 
@@ -235,7 +236,8 @@ class TestEqual(io.ComfyNode):
             raise ValueError(f"Inputs are not equal: {error_msg}")
 
         # If equal, return successfully with checkmark
-        return io.NodeOutput(ui=ui.PreviewText("✅ Test Passed"))
+        PromptServer.instance.send_progress_text("✅ Test Passed", cls.hidden.unique_id)
+        return io.NodeOutput()
 
 
 class TestDefinition(io.ComfyNode):
@@ -286,14 +288,14 @@ class TestDefinition(io.ComfyNode):
         return io.NodeOutput()
 
 
-class TestImageMatch(io.ComfyNode):
+class AssertImageMatch(io.ComfyNode):
     """Output node that validates image against perceptual hash"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="TestImageMatch",
-            display_name="Test Image Match",
+            node_id="AssertImageMatch",
+            display_name="Assert Image Match",
             category="testing",
             description="Compare image against perceptual hash and fail if difference exceeds threshold",
             inputs=[
@@ -463,4 +465,337 @@ class TestImageMatch(io.ComfyNode):
         )
 
         # Return empty output (previews already sent)
+        return io.NodeOutput()
+
+
+class AssertNotEqual(io.ComfyNode):
+    """Output node that checks if two inputs are NOT equal"""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertNotEqual",
+            display_name="Assert Not Equal",
+            category="testing",
+            description="Checks if two inputs are not equal, throws error if they are equal",
+            inputs=[
+                io.AnyType.Input("input1"),
+                io.AnyType.Input("input2"),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+        )
+
+    @classmethod
+    def _are_equal(cls, obj1: Any, obj2: Any) -> bool:
+        """Check if two objects are equal (reuses logic from AssertEqual)"""
+        # Check if types are different
+        if type(obj1) != type(obj2):
+            return False
+
+        # Handle dictionaries
+        if isinstance(obj1, dict):
+            if set(obj1.keys()) != set(obj2.keys()):
+                return False
+            for key in obj1.keys():
+                if not cls._are_equal(obj1[key], obj2[key]):
+                    return False
+            return True
+
+        # Handle lists and tuples
+        elif isinstance(obj1, (list, tuple)):
+            if len(obj1) != len(obj2):
+                return False
+            for item1, item2 in zip(obj1, obj2):
+                if not cls._are_equal(item1, item2):
+                    return False
+            return True
+
+        # Handle tensors
+        elif isinstance(obj1, torch.Tensor):
+            if obj1.shape != obj2.shape:
+                return False
+            return torch.allclose(obj1, obj2, rtol=1e-5, atol=1e-8)
+
+        # Handle other types with equality operator
+        else:
+            return obj1 == obj2
+
+    @classmethod
+    def execute(cls, input1: Any, input2: Any) -> io.NodeOutput:
+        """Check if inputs are NOT equal, raise error if they are equal"""
+
+        if cls._are_equal(input1, input2):
+            raise ValueError("Inputs are equal when they should be different")
+
+        PromptServer.instance.send_progress_text("✅ Test Passed (values differ)", cls.hidden.unique_id)
+        return io.NodeOutput()
+
+
+class AssertContainsColor(io.ComfyNode):
+    """Output node that checks if an image contains a specific color"""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertContainsColor",
+            display_name="Assert Contains Color",
+            category="testing",
+            description="Checks if image contains pixels of a specific color (useful for openpose, segmentation)",
+            inputs=[
+                io.Image.Input("image"),
+                io.String.Input(
+                    "color",
+                    default="#FF0000",
+                ),
+                io.Int.Input(
+                    "tolerance",
+                    default=10,
+                    min=0,
+                    max=255,
+                    display_mode=io.NumberDisplay.slider,
+                ),
+                io.Int.Input(
+                    "min_pixels",
+                    default=1,
+                    min=1,
+                    max=1000000,
+                    display_mode=io.NumberDisplay.number,
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+        )
+
+    @classmethod
+    def _parse_color(cls, color_str: str) -> tuple[int, int, int]:
+        """Parse color string to RGB tuple (0-255 range)"""
+        color_str = color_str.strip()
+
+        # Handle hex format (#RRGGBB or RRGGBB)
+        if color_str.startswith("#"):
+            color_str = color_str[1:]
+
+        if len(color_str) == 6:
+            try:
+                r = int(color_str[0:2], 16)
+                g = int(color_str[2:4], 16)
+                b = int(color_str[4:6], 16)
+                return (r, g, b)
+            except ValueError:
+                pass
+
+        # Handle RGB tuple format (r,g,b) or (r, g, b)
+        if "," in color_str:
+            color_str = color_str.strip("()[] ")
+            parts = [p.strip() for p in color_str.split(",")]
+            if len(parts) == 3:
+                try:
+                    return (int(parts[0]), int(parts[1]), int(parts[2]))
+                except ValueError:
+                    pass
+
+        raise ValueError(f"Invalid color format: '{color_str}'. Use hex (#FF0000) or RGB (255,0,0)")
+
+    @classmethod
+    def _color_distance(cls, c1: tuple[int, int, int], c2: tuple[int, int, int]) -> float:
+        """Calculate Euclidean distance between two colors"""
+        return ((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2 + (c1[2] - c2[2]) ** 2) ** 0.5
+
+    @classmethod
+    def execute(
+        cls,
+        image: torch.Tensor,
+        color: str,
+        tolerance: int,
+        min_pixels: int,
+    ) -> io.NodeOutput:
+        """Check if image contains the specified color"""
+        import numpy as np
+
+        # Parse target color
+        target_rgb = cls._parse_color(color)
+
+        # Convert image tensor to numpy (first image in batch)
+        # Image tensor is [B,H,W,C] with values 0-1
+        img_np = (image[0].cpu().numpy() * 255).astype(np.uint8)
+
+        # Count pixels within tolerance
+        matching_pixels = 0
+        height, width, _ = img_np.shape
+
+        for y in range(height):
+            for x in range(width):
+                pixel_rgb = (int(img_np[y, x, 0]), int(img_np[y, x, 1]), int(img_np[y, x, 2]))
+                if cls._color_distance(pixel_rgb, target_rgb) <= tolerance:
+                    matching_pixels += 1
+                    if matching_pixels >= min_pixels:
+                        # Early exit once we've found enough
+                        PromptServer.instance.send_progress_text(
+                            f"✅ Test Passed\nFound {matching_pixels}+ pixels matching {color}",
+                            cls.hidden.unique_id
+                        )
+                        return io.NodeOutput()
+
+        # Not enough matching pixels found
+        raise ValueError(
+            f"Color {color} not found in image.\n"
+            f"Found {matching_pixels} matching pixels (need at least {min_pixels}).\n"
+            f"Tolerance: {tolerance}"
+        )
+
+
+class AssertTensorShape(io.ComfyNode):
+    """Output node that checks tensor dimensions"""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertTensorShape",
+            display_name="Assert Tensor Shape",
+            category="testing",
+            description="Checks if tensor has expected dimensions (-1 = any value accepted)",
+            inputs=[
+                io.AnyType.Input("tensor"),
+                io.Int.Input(
+                    "batch",
+                    default=-1,
+                    min=-1,
+                    max=1024,
+                    display_mode=io.NumberDisplay.number,
+                ),
+                io.Int.Input(
+                    "height",
+                    default=-1,
+                    min=-1,
+                    max=16384,
+                    display_mode=io.NumberDisplay.number,
+                ),
+                io.Int.Input(
+                    "width",
+                    default=-1,
+                    min=-1,
+                    max=16384,
+                    display_mode=io.NumberDisplay.number,
+                ),
+                io.Int.Input(
+                    "channels",
+                    default=-1,
+                    min=-1,
+                    max=1024,
+                    display_mode=io.NumberDisplay.number,
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: Any,
+        batch: int,
+        height: int,
+        width: int,
+        channels: int,
+    ) -> io.NodeOutput:
+        """Check if tensor has expected shape"""
+
+        if not isinstance(tensor, torch.Tensor):
+            raise ValueError(f"Input is not a tensor, got {type(tensor).__name__}")
+
+        shape = tensor.shape
+        if len(shape) != 4:
+            raise ValueError(f"Expected 4D tensor [B,H,W,C], got shape {list(shape)}")
+
+        actual_batch, actual_height, actual_width, actual_channels = shape
+        errors = []
+
+        if batch != -1 and actual_batch != batch:
+            errors.append(f"batch: expected {batch}, got {actual_batch}")
+        if height != -1 and actual_height != height:
+            errors.append(f"height: expected {height}, got {actual_height}")
+        if width != -1 and actual_width != width:
+            errors.append(f"width: expected {width}, got {actual_width}")
+        if channels != -1 and actual_channels != channels:
+            errors.append(f"channels: expected {channels}, got {actual_channels}")
+
+        if errors:
+            raise ValueError(f"Tensor shape mismatch:\n" + "\n".join(errors) + f"\nActual shape: {list(shape)}")
+
+        PromptServer.instance.send_progress_text(
+            f"✅ Test Passed\nShape: [{actual_batch}, {actual_height}, {actual_width}, {actual_channels}]",
+            cls.hidden.unique_id
+        )
+        return io.NodeOutput()
+
+
+class AssertInRange(io.ComfyNode):
+    """Output node that checks if all tensor values are within bounds"""
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertInRange",
+            display_name="Assert In Range",
+            category="testing",
+            description="Checks if all tensor values are within min/max bounds",
+            inputs=[
+                io.AnyType.Input("tensor"),
+                io.Float.Input(
+                    "min_value",
+                    default=0.0,
+                    min=-1e10,
+                    max=1e10,
+                    step=0.01,
+                    display_mode=io.NumberDisplay.number,
+                ),
+                io.Float.Input(
+                    "max_value",
+                    default=1.0,
+                    min=-1e10,
+                    max=1e10,
+                    step=0.01,
+                    display_mode=io.NumberDisplay.number,
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        tensor: Any,
+        min_value: float,
+        max_value: float,
+    ) -> io.NodeOutput:
+        """Check if all tensor values are within bounds"""
+
+        if not isinstance(tensor, torch.Tensor):
+            raise ValueError(f"Input is not a tensor, got {type(tensor).__name__}")
+
+        actual_min = tensor.min().item()
+        actual_max = tensor.max().item()
+
+        errors = []
+        if actual_min < min_value:
+            errors.append(f"Minimum value {actual_min:.6f} is below threshold {min_value}")
+        if actual_max > max_value:
+            errors.append(f"Maximum value {actual_max:.6f} exceeds threshold {max_value}")
+
+        if errors:
+            raise ValueError(
+                "Tensor values out of range:\n" + "\n".join(errors) +
+                f"\nActual range: [{actual_min:.6f}, {actual_max:.6f}]"
+            )
+
+        PromptServer.instance.send_progress_text(
+            f"✅ Test Passed\nRange: [{actual_min:.4f}, {actual_max:.4f}]",
+            cls.hidden.unique_id
+        )
         return io.NodeOutput()

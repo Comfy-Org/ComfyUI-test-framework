@@ -410,7 +410,7 @@ class AssertImageMatch(io.ComfyNode):
                 cls.hidden.unique_id
             )
 
-            return io.NodeOutput()
+            raise ValueError(f"No perceptual hash provided to compare against. Actual hash is {calculated_hash}")
 
         # Compare hashes
         difference = cls._compare_hashes(calculated_hash, perceptual_hash)
@@ -656,7 +656,7 @@ class AssertTensorShape(io.ComfyNode):
             node_id="AssertTensorShape",
             display_name="Assert Tensor Shape",
             category="testing",
-            description="Checks if tensor has expected dimensions (-1 = any value accepted)",
+            description="Checks if tensor has expected dimensions. Supports 3D [B,H,W] masks and 4D [B,H,W,C] images. Use -1 to accept any value, or set channels=-1 for 3D tensors.",
             inputs=[
                 io.AnyType.Input("tensor"),
                 io.Int.Input(
@@ -708,26 +708,47 @@ class AssertTensorShape(io.ComfyNode):
             raise ValueError(f"Input is not a tensor, got {type(tensor).__name__}")
 
         shape = tensor.shape
-        if len(shape) != 4:
-            raise ValueError(f"Expected 4D tensor [B,H,W,C], got shape {list(shape)}")
-
-        actual_batch, actual_height, actual_width, actual_channels = shape
         errors = []
 
-        if batch != -1 and actual_batch != batch:
-            errors.append(f"batch: expected {batch}, got {actual_batch}")
-        if height != -1 and actual_height != height:
-            errors.append(f"height: expected {height}, got {actual_height}")
-        if width != -1 and actual_width != width:
-            errors.append(f"width: expected {width}, got {actual_width}")
-        if channels != -1 and actual_channels != channels:
-            errors.append(f"channels: expected {channels}, got {actual_channels}")
+        # Handle both 3D tensors [B,H,W] (masks) and 4D tensors [B,H,W,C] (images)
+        if len(shape) == 3:
+            actual_batch, actual_height, actual_width = shape
+            actual_channels = None  # 3D tensors have no channel dimension
+
+            if batch != -1 and actual_batch != batch:
+                errors.append(f"batch: expected {batch}, got {actual_batch}")
+            if height != -1 and actual_height != height:
+                errors.append(f"height: expected {height}, got {actual_height}")
+            if width != -1 and actual_width != width:
+                errors.append(f"width: expected {width}, got {actual_width}")
+            if channels != -1:
+                errors.append(f"channels: expected {channels}, but tensor is 3D (no channel dimension)")
+
+        elif len(shape) == 4:
+            actual_batch, actual_height, actual_width, actual_channels = shape
+
+            if batch != -1 and actual_batch != batch:
+                errors.append(f"batch: expected {batch}, got {actual_batch}")
+            if height != -1 and actual_height != height:
+                errors.append(f"height: expected {height}, got {actual_height}")
+            if width != -1 and actual_width != width:
+                errors.append(f"width: expected {width}, got {actual_width}")
+            if channels != -1 and actual_channels != channels:
+                errors.append(f"channels: expected {channels}, got {actual_channels}")
+
+        else:
+            raise ValueError(f"Expected 3D [B,H,W] or 4D [B,H,W,C] tensor, got {len(shape)}D with shape {list(shape)}")
 
         if errors:
             raise ValueError(f"Tensor shape mismatch:\n" + "\n".join(errors) + f"\nActual shape: {list(shape)}")
 
+        if actual_channels is None:
+            shape_str = f"[{actual_batch}, {actual_height}, {actual_width}]"
+        else:
+            shape_str = f"[{actual_batch}, {actual_height}, {actual_width}, {actual_channels}]"
+
         PromptServer.instance.send_progress_text(
-            f"✅ Test Passed\nShape: [{actual_batch}, {actual_height}, {actual_width}, {actual_channels}]",
+            f"✅ Test Passed\nShape: {shape_str}",
             cls.hidden.unique_id
         )
         return io.NodeOutput()

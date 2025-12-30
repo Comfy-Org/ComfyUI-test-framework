@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "CLI tool for running ComfyUI test workflows"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "Jacob Segal", email = "jacob@comfy.org"},
+    {name = "Comfy-Org", email = "hello@comfy.org"}
+]
 dependencies = [
     "click>=8.1.0",
     "websocket-client>=1.6.0",
@@ -16,6 +21,11 @@ dev = [
     "ruff>=0.1.0",
     "pyright>=1.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Comfy-Org/ComfyUI-test-framework"
+Repository = "https://github.com/Comfy-Org/ComfyUI-test-framework"
+Issues = "https://github.com/Comfy-Org/ComfyUI-test-framework/issues"
 
 [project.scripts]
 comfyci = "comfyci:main"

@@ -10,7 +10,7 @@ A CLI tool for running ComfyUI test workflows in CI/CD environments.
 
 - **Glob pattern support**: Run multiple test files with patterns like `./tests/**/*.json`
 - **GPU filtering**: Skip GPU-required tests with the `--cpu` flag
-- **TestMustExecute validation**: Ensures all TestMustExecute nodes either ran or were cached
+- **AssertExecuted validation**: Ensures all AssertExecuted nodes either ran or were cached
 - **Standard output formats**: Simple text output (with future support for JUnit XML)
 - **Timeout configuration**: Per-test timeouts with extraTime support
 - **Fail-fast mode**: Stop on first failure for quick feedback
@@ -48,13 +48,16 @@ comfyci --help
 
 ```bash
 # Run all tests in a directory
-comfyci ./tests/**/*.json --target localhost:8188
+comfyci ./tests/**/*.json --server localhost:8188
 
 # Run specific test files
-comfyci test1.json test2.json --target localhost:8188
+comfyci test1.json test2.json --server localhost:8188
 
 # Skip GPU-required tests
 comfyci ./tests/**/*.json --cpu
+
+# Run against Comfy Cloud
+comfyci ./tests/**/*.json --cloud --op-entry Employee/TestCI
 ```
 
 ### Command-Line Options
@@ -64,16 +67,21 @@ Usage: comfyci [OPTIONS] PATTERNS...
 
   Run ComfyUI test workflows.
 
-  PATTERNS: Glob patterns for test workflow JSON files
+  PATTERNS: Glob patterns for test workflow JSON files (e.g., ./tests/**/*.json)
 
 Options:
-  --target TEXT       ComfyUI server address (host:port) [default: localhost:8188]
-  --cpu               Skip tests that require GPU
-  -v, --verbose       Enable verbose output
-  -x, --failfast      Stop on first test failure
-  --timeout INTEGER   Override default timeout in seconds
-  --no-color          Disable colored output
-  --help              Show this message and exit
+  --server TEXT      ComfyUI server address (host:port)  [default: localhost:8188]
+  --ssl              Use HTTPS/WSS for server connection
+  --cloud            Use Comfy Cloud API (e.g., /jobs instead of /history)
+  --cpu              Skip tests that require GPU
+  -v, --verbose      Enable verbose output
+  -x, --failfast     Stop on first test failure
+  --timeout INTEGER  Override default timeout in seconds (default: 120 + test extraTime)
+  --no-color         Disable colored output
+  --op-exe TEXT      1Password CLI executable (op or op.exe)  [default: op.exe]
+  --op-entry TEXT    1Password entry path (e.g., Employee/TestCI). Fetches
+                     email, password, FIREBASE_API_KEY.
+  --help             Show this message and exit.
 ```
 
 ### Examples
@@ -95,7 +103,12 @@ comfyci ./tests/**/*.json --timeout 300
 
 **Connect to remote ComfyUI instance:**
 ```bash
-comfyci ./tests/**/*.json --target 192.168.1.100:8188
+comfyci ./tests/**/*.json --server 192.168.1.100:8188
+```
+
+**Run against Comfy Cloud with authentication:**
+```bash
+comfyci ./tests/**/*.json --cloud --ssl --op-entry Employee/TestCI
 ```
 
 ## Test Workflow Structure
@@ -125,14 +138,14 @@ Defines test metadata:
 - `requiresGPU`: Set to `true` to skip with `--cpu` flag
 - `extraTime`: Additional timeout in seconds (added to 120s default)
 
-### TestMustExecute Node
+### AssertExecuted Node
 
 Marks nodes that must execute or be cached for the test to pass:
 
 ```json
 {
   "5": {
-    "class_type": "TestMustExecute",
+    "class_type": "AssertExecuted",
     "inputs": {
       "input": ["2", 0]
     }
@@ -140,20 +153,20 @@ Marks nodes that must execute or be cached for the test to pass:
 }
 ```
 
-`comfyci` validates that all TestMustExecute nodes in the workflow either:
+`comfyci` validates that all AssertExecuted nodes in the workflow either:
 - Executed during the test run, or
 - Were cached (already computed)
 
-If any TestMustExecute node didn't run or cache, the test fails.
+If any AssertExecuted node didn't run or cache, the test fails.
 
-### TestEqual Node
+### AssertEqual Node
 
 Validates that two values are equal:
 
 ```json
 {
   "6": {
-    "class_type": "TestEqual",
+    "class_type": "AssertEqual",
     "inputs": {
       "input1": ["2", 0],
       "input2": ["3", 0]
@@ -249,22 +262,6 @@ comfyci ./tests/**/*.json --parallel --workers 4
 
 ## Development
 
-### Project Structure
-
-```
-cli/
-├── comfyci.py              # Main CLI entry point
-├── workflow_parser.py      # Workflow parsing and discovery
-├── comfy_client.py         # ComfyUI client communication
-├── test_runner.py          # Test execution strategies
-├── formatters/
-│   ├── __init__.py
-│   ├── base.py            # Abstract formatter base
-│   └── simple.py          # Simple text formatter
-├── pyproject.toml         # Project configuration
-└── README.md              # This file
-```
-
 ### Adding New Output Formats
 
 To add a new output format (e.g., JUnit XML):
@@ -325,4 +322,4 @@ comfyci ./**/*.json
 
 ## License
 
-This tool is part of the ComfyUI-test-framework project.
+MIT License - see [LICENSE](../LICENSE) for details.

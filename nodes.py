@@ -48,7 +48,8 @@ class TestImageGenerator(io.ComfyNode):
             ],
             outputs=[
                 io.Image.Output(display_name="Image"),
-            ]
+            ],
+            is_dev_only=True,
         )
 
     @classmethod
@@ -142,6 +143,7 @@ class AssertExecuted(io.ComfyNode):
                 io.AnyType.Output("output"),
             ],
             is_output_node=False,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -167,6 +169,7 @@ class AssertEqual(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -278,6 +281,7 @@ class TestDefinition(io.ComfyNode):
             ],
             outputs=[],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -322,6 +326,7 @@ class AssertImageMatch(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -485,6 +490,7 @@ class AssertNotEqual(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -567,6 +573,7 @@ class AssertContainsColor(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -691,6 +698,7 @@ class AssertTensorShape(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod
@@ -786,6 +794,7 @@ class AssertInRange(io.ComfyNode):
             outputs=[],
             hidden=[io.Hidden.unique_id],
             is_output_node=True,
+            is_dev_only=True,
         )
 
     @classmethod

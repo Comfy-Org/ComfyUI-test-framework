@@ -56,13 +56,22 @@ comfyci --help
 | **Assert Image Match** | Compare image against a perceptual hash with configurable threshold |
 | **Assert Contains Color** | Verify image contains pixels of a specific color |
 | **Assert Tensor Shape** | Validate tensor dimensions (batch, height, width, channels) |
+| **Assert Image Similarity** | Compare two images using PSNR, SSIM, MSE, or per-channel mean shift with configurable threshold |
+| **Assert Mask Coverage** | Check that mask coverage (% of non-zero pixels) is within an expected range |
+| **Assert Mask Binary** | Check that all mask values are exactly 0 or 1 (hard mask) |
+| **Assert Mask Fuzzy** | Check that a soft-edge mask has a controlled amount of grey boundary pixels |
+| **Assert String Contains** | Check that a string contains an expected substring |
+| **Assert String Match** | Check that a string matches a pattern (exact or regex) |
+| **Assert String Hash** | Compare a string's SHA-256 hash against an expected value (for large text outputs) |
 | **Assert In Range** | Check if all tensor values are within min/max bounds |
 
 ### Utilities
 
 | Node | Description |
 |------|-------------|
-| **Test Image Generator** | Generate test images: solid black, white, noise, or face pattern |
+| **Test Image Generator** | Generate test images: solid black, white, noise, face, synthetic benchmark pattern, or video benchmark pattern |
+| **Test Mask Generator** | Generate test masks: solid, circle, gradient, checkerboard, noise, or half masks |
+| **Test String Generator** | Generate test strings: preset prompts, special characters, templates, or custom text |
 
 ## Usage
 

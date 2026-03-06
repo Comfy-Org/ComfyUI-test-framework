@@ -74,6 +74,248 @@ class AssertStringContains(io.ComfyNode):
         return io.NodeOutput()
 
 
+class AssertStringNotContains(io.ComfyNode):
+    """Output node that checks a string does NOT contain a forbidden pattern.
+
+    Modes:
+      literal — Simple substring search. Fails if the substring appears anywhere
+                in the text. Use for single known-bad strings.
+      regex   — Python regex search. Fails if the pattern matches anywhere in the
+                text (uses re.search). Use for matching multiple forbidden patterns
+                at once, e.g. r"(I cannot|I'm sorry|error|exception)".
+      llm_guard — Built-in check for common LLM failure patterns. The pattern field
+                  is ignored. Checks for: empty/whitespace-only output, refusal
+                  phrases, apology hedging, error/exception markers, and
+                  safety disclaimers. Case-insensitive.
+
+    Example test patterns:
+      - LLM response → llm_guard mode (catches refusals, errors, empty output)
+      - Prompt sanitizer → literal mode, check for banned word
+      - Template resolver → regex mode, r"\\{\\w+\\}" to catch unresolved placeholders
+      - Multi-pattern ban → regex mode, r"(badword1|badword2|badword3)"
+    """
+
+    LLM_GUARD_PATTERNS = [
+        r"^\s*$",
+        r"\bI cannot\b",
+        r"\bI can't\b",
+        r"\bI'm sorry\b",
+        r"\bI apologize\b",
+        r"\bI'm unable to\b",
+        r"\bI am unable to\b",
+        r"\bI'm not able to\b",
+        r"\bas an AI\b",
+        r"\bas a language model\b",
+        r"\berror\s*:",
+        r"\bexception\s*:",
+        r"\btraceback\b",
+        r"\bsyntax\s*error\b",
+        r"\bruntime\s*error\b",
+    ]
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertStringNotContains",
+            display_name="Assert String Not Contains",
+            category="testing",
+            description="Check that a string does NOT contain a forbidden pattern (literal, regex, or built-in LLM guard)",
+            inputs=[
+                io.AnyType.Input("text"),
+                io.String.Input(
+                    "pattern",
+                    default="",
+                    multiline=True,
+                ),
+                io.Combo.Input(
+                    "mode",
+                    options=["literal", "regex", "llm_guard"],
+                    default="literal",
+                ),
+                io.Boolean.Input(
+                    "case_sensitive",
+                    default=False,
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+            is_dev_only=True,
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        text: Any,
+        pattern: str,
+        mode: str,
+        case_sensitive: bool,
+    ) -> io.NodeOutput:
+        """Check that text does NOT contain the forbidden pattern."""
+        import re
+
+        if not isinstance(text, str):
+            raise ValueError(f"Input is not a string, got {type(text).__name__}")
+
+        if mode == "llm_guard":
+            combined = "|".join(f"({p})" for p in cls.LLM_GUARD_PATTERNS)
+            match = re.search(combined, text, re.IGNORECASE)
+            if match:
+                pos = match.start()
+                start = max(0, pos - 50)
+                end = min(len(text), match.end() + 50)
+                context = text[start:end]
+                if start > 0:
+                    context = "..." + context
+                if end < len(text):
+                    context = context + "..."
+                matched_text = match.group() if match.group().strip() else "(empty/whitespace)"
+                raise ValueError(
+                    f"LLM guard triggered:\n"
+                    f"Matched: {repr(matched_text)}\n"
+                    f"At position: {pos}\n"
+                    f"Context: {repr(context)}"
+                )
+
+            PromptServer.instance.send_progress_text(
+                f"✅ Test Passed\nLLM guard: no refusals/errors found in text ({len(text)} chars)",
+                cls.hidden.unique_id
+            )
+            return io.NodeOutput()
+
+        if not pattern:
+            raise ValueError("Pattern to check against is empty")
+
+        if mode == "literal":
+            haystack = text if case_sensitive else text.lower()
+            needle = pattern if case_sensitive else pattern.lower()
+
+            if needle in haystack:
+                pos = haystack.index(needle)
+                start = max(0, pos - 50)
+                end = min(len(text), pos + len(pattern) + 50)
+                context = text[start:end]
+                if start > 0:
+                    context = "..." + context
+                if end < len(text):
+                    context = context + "..."
+                raise ValueError(
+                    f"String contains forbidden substring:\n"
+                    f"Found: {repr(pattern)}\n"
+                    f"At position: {pos}\n"
+                    f"Case sensitive: {case_sensitive}\n"
+                    f"Context: {repr(context)}"
+                )
+
+        elif mode == "regex":
+            flags = 0 if case_sensitive else re.IGNORECASE
+            match = re.search(pattern, text, flags)
+            if match:
+                pos = match.start()
+                start = max(0, pos - 50)
+                end = min(len(text), match.end() + 50)
+                context = text[start:end]
+                if start > 0:
+                    context = "..." + context
+                if end < len(text):
+                    context = context + "..."
+                raise ValueError(
+                    f"String matches forbidden regex pattern:\n"
+                    f"Pattern: {repr(pattern)}\n"
+                    f"Matched: {repr(match.group())}\n"
+                    f"At position: {pos}\n"
+                    f"Case sensitive: {case_sensitive}\n"
+                    f"Context: {repr(context)}"
+                )
+
+        PromptServer.instance.send_progress_text(
+            f"✅ Test Passed\nMode: {mode}, pattern not found in text ({len(text)} chars)",
+            cls.hidden.unique_id
+        )
+        return io.NodeOutput()
+
+
+class AssertStringLength(io.ComfyNode):
+    """Output node that checks a string's length is within an expected range.
+
+    Useful for non-deterministic outputs where exact content varies but length
+    should fall within reasonable bounds. Catches empty, truncated, or runaway outputs.
+
+    Example test patterns:
+      - LLM caption → expect 50-500 chars (catches empty or degenerate responses)
+      - Prompt template resolution → expect roughly same length as template
+      - Text summarizer → expect output shorter than input (use with known input length)
+      - Filename generator → expect 10-100 chars
+    """
+
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="AssertStringLength",
+            display_name="Assert String Length",
+            category="testing",
+            description="Check that a string's length is within min/max bounds",
+            inputs=[
+                io.AnyType.Input("text"),
+                io.Int.Input(
+                    "min_length",
+                    default=0,
+                    min=0,
+                    max=10000000,
+                    step=1,
+                    display_mode=io.NumberDisplay.number,
+                ),
+                io.Int.Input(
+                    "max_length",
+                    default=10000,
+                    min=0,
+                    max=10000000,
+                    step=1,
+                    display_mode=io.NumberDisplay.number,
+                ),
+            ],
+            outputs=[],
+            hidden=[io.Hidden.unique_id],
+            is_output_node=True,
+            is_dev_only=True,
+        )
+
+    @classmethod
+    def execute(
+        cls,
+        text: Any,
+        min_length: int,
+        max_length: int,
+    ) -> io.NodeOutput:
+        """Check that text length is within bounds."""
+
+        if not isinstance(text, str):
+            raise ValueError(f"Input is not a string, got {type(text).__name__}")
+
+        length = len(text)
+        errors = []
+
+        if length < min_length:
+            errors.append(f"Length {length} is below minimum {min_length}")
+        if length > max_length:
+            errors.append(f"Length {length} exceeds maximum {max_length}")
+
+        if errors:
+            preview = text[:100] + "..." if len(text) > 100 else text
+            raise ValueError(
+                "String length assertion failed:\n" + "\n".join(errors) +
+                f"\nActual length: {length} chars\n"
+                f"Expected: [{min_length}, {max_length}]\n"
+                f"Preview: {repr(preview)}"
+            )
+
+        PromptServer.instance.send_progress_text(
+            f"✅ Test Passed\nLength: {length} chars (expected [{min_length}, {max_length}])",
+            cls.hidden.unique_id
+        )
+        return io.NodeOutput()
+
+
 class AssertStringMatch(io.ComfyNode):
     """Output node that checks if a string matches a pattern exactly or via regex.
 

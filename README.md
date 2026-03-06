@@ -61,6 +61,8 @@ comfyci --help
 | **Assert Mask Binary** | Check that all mask values are exactly 0 or 1 (hard mask) |
 | **Assert Mask Fuzzy** | Check that a soft-edge mask has a controlled amount of grey boundary pixels |
 | **Assert String Contains** | Check that a string contains an expected substring |
+| **Assert String Not Contains** | Check that a string does NOT contain a forbidden substring |
+| **Assert String Length** | Check that a string's length is within min/max bounds |
 | **Assert String Match** | Check that a string matches a pattern (exact or regex) |
 | **Assert String Hash** | Compare a string's SHA-256 hash against an expected value (for large text outputs) |
 | **Assert In Range** | Check if all tensor values are within min/max bounds |

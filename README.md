@@ -71,7 +71,6 @@ comfyci --help
 |------|-------------|
 | **Test Image Generator** | Generate test images: solid black, white, noise, face, synthetic benchmark pattern, or video benchmark pattern |
 | **Test Mask Generator** | Generate test masks: solid, circle, gradient, checkerboard, noise, or half masks |
-| **Test String Generator** | Generate test strings: preset prompts, special characters, templates, or custom text |
 
 ## Usage
 

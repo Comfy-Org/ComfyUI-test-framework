@@ -233,6 +233,58 @@ def generate_video_benchmark_pattern(width=640, height=480, batch_size=1, device
 class TestImageGenerator(io.ComfyNode):
     """Generates test images based on selected type"""
 
+    SKILL_DOC = """
+Generates deterministic test images with known properties. Use instead of `LoadImage`
+when you need reproducible inputs without external file dependencies.
+
+### Inputs
+
+- `image_type` (COMBO) — The type of image to generate:
+  - `"black"` — Solid black (all zeros). Good for edge-case and baseline tests.
+  - `"white"` — Solid white (all ones). Good for edge-case and baseline tests.
+  - `"noise"` — Seeded random noise, deterministic for a given seed. Good for
+    general-purpose image processing tests.
+  - `"face"` — Loads a face photo bundled with the framework. Use for face detection,
+    segmentation, or portrait-specific nodes.
+  - `"synthetic_benchmark"` — Multi-zone QA pattern with color fidelity patches,
+    luminance ramp, detail stress checkerboards, texture stimuli (noise, Gaussian,
+    upscaled, gradient), and a geometry circle. **Use this for testing image editing,
+    filtering, color correction, and style transfer nodes** — it provides diverse
+    visual features that reveal artifacts across different processing domains.
+  - `"video_benchmark"` — Broadcast-style SMPTE color bar pattern with calibration
+    bars, chroma row, and luminance/blacks/clipping sections. **Use this for testing
+    video processing, frame interpolation, and diffusion/inference nodes** — the
+    standardized color bars make it easy to detect color shifts, banding, and temporal
+    artifacts.
+  Default: `"black"`.
+- `width` (INT) — Image width. Range: 64–4096, step 8. Default: `512`.
+- `height` (INT) — Image height. Range: 64–4096, step 8. Default: `512`.
+- `batch_size` (INT) — Number of images in batch. Range: 1–64. Default: `1`.
+  Use `batch_size > 1` for testing video/batch processing nodes.
+- `seed` (INT) — Random seed for `"noise"` type. Ignored by other types. Default: `0`.
+
+### Outputs
+
+- `image` (IMAGE) — Tensor `[B,H,W,3]`, float32, values in `[0.0, 1.0]`.
+
+### When to Use
+
+- As the primary image source for test workflows. Prefer this over `LoadImage` because
+  it requires no external files and is fully deterministic.
+- Choose `image_type` based on what the node under test does:
+  - Image filters/editing → `"synthetic_benchmark"`
+  - Video processing → `"video_benchmark"` with `batch_size > 1`
+  - Face/portrait nodes → `"face"`
+  - Edge-case testing → `"black"` or `"white"`
+  - General purpose → `"noise"`
+
+### Example
+
+```
+[TestImageGenerator(image_type="synthetic_benchmark", width=512, height=512)] → [NodeUnderTest] → [AssertTensorShape(...)]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -385,6 +437,64 @@ class TestMaskGenerator(io.ComfyNode):
       half_left — Left half = 1, right half = 0. Coverage: 50%. Always binary.
       half_top — Top half = 1, bottom half = 0. Coverage: 50%. Always binary.
     """
+
+    SKILL_DOC = """
+Generates deterministic test masks with known coverage and properties. Use instead of
+`LoadImage` mask output when you need reproducible mask inputs.
+
+### Inputs
+
+- `mask_type` (COMBO) — The type of mask to generate:
+  - `"solid_black"` — All zeros. Coverage: 0%. Binary.
+  - `"solid_white"` — All ones. Coverage: 100%. Binary.
+  - `"circle"` — Centered filled circle, radius = `min(H,W) * 0.45`. Coverage: ~78%.
+    Binary.
+  - `"gradient_horizontal"` — Left-to-right linear ramp 0→1. Coverage: ~100%. Soft.
+  - `"gradient_vertical"` — Top-to-bottom linear ramp 0→1. Coverage: ~100%. Soft.
+  - `"checkerboard"` — Alternating 0/1 blocks (8px). Coverage: ~50%. Binary.
+  - `"noise"` — Seeded random values in `[0, 1]`. Coverage: ~100%. Soft.
+  - `"half_left"` — Left half = 1, right half = 0. Coverage: 50%. Binary.
+  - `"half_top"` — Top half = 1, bottom half = 0. Coverage: 50%. Binary.
+  Default: `"solid_white"`.
+- `width` (INT) — Mask width. Range: 64–4096, step 8. Default: `512`.
+- `height` (INT) — Mask height. Range: 64–4096, step 8. Default: `512`.
+- `batch_size` (INT) — Number of masks in batch. Range: 1–64. Default: `1`.
+- `seed` (INT) — Random seed for `"noise"` type. Default: `0`.
+
+### Outputs
+
+- `mask` (MASK) — Tensor `[B,H,W]`, float32, values in `[0.0, 1.0]`.
+
+### When to Use
+
+- As the primary mask source for testing mask-processing nodes.
+- Choose `mask_type` based on what you need to test:
+  - Threshold/binary operations → `"gradient_horizontal"` (soft input, expect binary output)
+  - Mask compositing → `"circle"` + `"half_left"` (two distinct shapes)
+  - Blur/feather → `"circle"` or `"checkerboard"` (binary input, expect soft output)
+  - Edge cases → `"solid_black"` or `"solid_white"`
+  - General purpose → `"noise"` or `"circle"`
+
+### Known Coverage Values (for `AssertMaskCoverage`)
+
+| Mask Type | Coverage | Binary? |
+|-----------|----------|---------|
+| `solid_black` | 0% | Yes |
+| `solid_white` | 100% | Yes |
+| `circle` | ~78% | Yes |
+| `checkerboard` | ~50% | Yes |
+| `half_left` | 50% | Yes |
+| `half_top` | 50% | Yes |
+| `gradient_horizontal` | ~100% | No |
+| `gradient_vertical` | ~100% | No |
+| `noise` | ~100% | No |
+
+### Example
+
+```
+[TestMaskGenerator(mask_type="circle")] → [MaskBlur(amount=5)] → [AssertMaskFuzzy(edge_tolerance=0.1, max_soft_percentage=15)]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:

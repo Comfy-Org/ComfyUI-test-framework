@@ -8,6 +8,35 @@ import torch
 class AssertExecuted(io.ComfyNode):
     """Pass-through node that marks a value as requiring execution (not cached)"""
 
+    SKILL_DOC = """
+Takes in any value and returns it unchanged, while asserting that the node actually
+executed (was not served from cache). Use as a pass-through in the middle of a chain
+when you need to verify that upstream nodes ran.
+
+### Inputs
+
+- `input` (ANY) — The value to pass through. Accepts any type (IMAGE, MASK, STRING, etc.).
+
+### Outputs
+
+- Returns the input value unchanged. Output type matches input type.
+
+### When to Use
+
+- When a node has no testable output but you need to confirm it ran.
+- Insert between two nodes to assert the chain executed end-to-end.
+- Combine with other assertions: route through `AssertExecuted` first, then to a
+  type-specific assertion.
+
+### Example
+
+```
+[NodeUnderTest] → [AssertExecuted] → [PreviewImage]
+```
+
+The `AssertExecuted` confirms the node ran; `PreviewImage` provides the output node.
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -33,6 +62,40 @@ class AssertExecuted(io.ComfyNode):
 
 class AssertEqual(io.ComfyNode):
     """Output node that checks if two inputs are equal"""
+
+    SKILL_DOC = """
+Compares two values for deep equality. Fails with a detailed error if they differ.
+This is an output node (no outputs — terminates the chain).
+
+### Inputs
+
+- `input1` (ANY) — First value to compare.
+- `input2` (ANY) — Second value to compare.
+
+### Comparison Behavior
+
+- **Tensors**: Checks shape equality, then uses `torch.allclose(rtol=1e-5, atol=1e-8)`
+  for floating-point tolerance.
+- **Dicts**: Checks key sets match, then recursively compares values.
+- **Lists/Tuples**: Checks length, then element-by-element comparison.
+- **Other types**: Uses `==` operator.
+- Type mismatch between `input1` and `input2` always fails.
+
+### When to Use
+
+- Verify a node produces an exact expected output (e.g. string concatenation,
+  mathematical operation, deterministic transform).
+- Compare the output of two different nodes that should produce identical results.
+- Validate that a node returns its input unchanged (identity test).
+
+### Example
+
+Test that a color inversion applied twice returns the original image:
+```
+[TestImageGenerator] → [InvertNode] → [InvertNode] → [AssertEqual.input1]
+[TestImageGenerator] ─────────────────────────────→ [AssertEqual.input2]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -125,6 +188,35 @@ class AssertEqual(io.ComfyNode):
 class AssertNotEqual(io.ComfyNode):
     """Output node that checks if two inputs are NOT equal"""
 
+    SKILL_DOC = """
+Checks that two values are NOT equal. Fails if they are identical.
+This is an output node (no outputs — terminates the chain).
+
+### Inputs
+
+- `input1` (ANY) — First value.
+- `input2` (ANY) — Second value.
+
+### Comparison Behavior
+
+Same deep comparison logic as `AssertEqual` (tensor allclose, recursive dict/list,
+`==` for others) — but the assertion is inverted.
+
+### When to Use
+
+- Verify that a processing node actually changed its input (e.g. a blur, noise
+  addition, or color correction produced a different output than the original).
+- Confirm that two different parameter settings produce different outputs.
+
+### Example
+
+Test that a blur node actually modifies the image:
+```
+[TestImageGenerator] → [BlurNode] → [AssertNotEqual.input1]
+[TestImageGenerator] ────────────→ [AssertNotEqual.input2]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -190,6 +282,42 @@ class AssertNotEqual(io.ComfyNode):
 
 class AssertTensorShape(io.ComfyNode):
     """Output node that checks tensor dimensions"""
+
+    SKILL_DOC = """
+Validates that a tensor has the expected dimensions. Supports both 3D `[B,H,W]` masks
+and 4D `[B,H,W,C]` images. Use `-1` for any dimension you want to accept any value for.
+This is an output node.
+
+### Inputs
+
+- `tensor` (ANY) — The tensor to validate. Must be a `torch.Tensor`.
+- `batch` (INT) — Expected batch size. Default: `-1` (any).
+- `height` (INT) — Expected height. Default: `-1` (any).
+- `width` (INT) — Expected width. Default: `-1` (any).
+- `channels` (INT) — Expected channel count. Default: `-1` (any). Set to `-1` for
+  3D mask tensors (which have no channel dimension).
+
+### When to Use
+
+- Verify a node preserves or transforms image dimensions correctly.
+- Check that a batch-processing node outputs the expected number of frames.
+- Validate that a mask node outputs 3D `[B,H,W]` and not 4D `[B,H,W,C]`.
+- Use after any node where dimensions might change (resize, crop, pad, tile).
+
+### Tips
+
+- For images: expect 4D `[B,H,W,3]` — set `channels=3`.
+- For masks: expect 3D `[B,H,W]` — leave `channels=-1`.
+- Set only the dimensions you care about; use `-1` for the rest.
+- All mismatches are reported at once (not just the first one).
+
+### Example
+
+Verify an upscale node doubles the resolution:
+```
+[TestImageGenerator(width=256, height=256)] → [Upscale2x] → [AssertTensorShape(batch=1, height=512, width=512, channels=3)]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:
@@ -298,6 +426,36 @@ class AssertTensorShape(io.ComfyNode):
 
 class AssertInRange(io.ComfyNode):
     """Output node that checks if all tensor values are within bounds"""
+
+    SKILL_DOC = """
+Checks that ALL values in a tensor fall within `[min_value, max_value]`. Useful for
+catching NaN, inf, or out-of-range pixel values after processing. This is an output node.
+
+### Inputs
+
+- `tensor` (ANY) — The tensor to validate. Must be a `torch.Tensor`.
+- `min_value` (FLOAT) — Lower bound (inclusive). Default: `0.0`.
+- `max_value` (FLOAT) — Upper bound (inclusive). Default: `1.0`.
+
+### When to Use
+
+- After any image/mask processing node to verify outputs stay in valid `[0.0, 1.0]` range.
+- After mathematical operations that might produce negative or >1 values.
+- To detect NaN or inf values (they will be outside any finite range).
+- For nodes that should produce values in a specific range (e.g. depth maps in `[0, 1]`).
+
+### Tips
+
+- The default range `[0.0, 1.0]` is correct for most ComfyUI image and mask tensors.
+- The error message reports the actual min and max found in the tensor.
+
+### Example
+
+Verify a color correction node keeps values in valid range:
+```
+[TestImageGenerator(image_type="noise")] → [ColorCorrection] → [AssertInRange(min_value=0.0, max_value=1.0)]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:

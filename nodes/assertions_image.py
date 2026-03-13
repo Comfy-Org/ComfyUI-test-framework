@@ -8,6 +8,52 @@ import torch
 class AssertImageMatch(io.ComfyNode):
     """Output node that validates image against perceptual hash"""
 
+    SKILL_DOC = """
+Compares an image against an expected perceptual hash (dHash, 64-bit) and fails if the
+Hamming distance exceeds a threshold. This is the primary way to lock down expected
+visual output for deterministic nodes. This is an output node.
+
+### Inputs
+
+- `image` (IMAGE) — The image tensor to validate. Format: `[B,H,W,C]`.
+- `perceptual_hash` (STRING) — The expected 64-character binary hash string. Leave empty
+  (`""`) on first run to capture the hash. Default: `""`.
+- `delta` (FLOAT) — Maximum allowed Hamming distance as a fraction (0.0–1.0).
+  `0.0` = exact match, `0.05` = ~3 bits can differ, `1.0` = any image passes.
+  Default: `0.05`.
+- `hash_function` (COMBO) — Hash algorithm. Currently only `"dhash"`. Default: `"dhash"`.
+
+### First-Run Workflow
+
+1. Leave `perceptual_hash` empty (`""`).
+2. Run the test — it will **fail** with an error containing the calculated hash.
+3. **Review the generated image** in ComfyUI to confirm it looks correct.
+4. Copy the hash from the error message into the `perceptual_hash` field.
+5. Future runs validate against this approved hash.
+
+**This requires human approval.** Never auto-populate the hash without visual review.
+
+### When to Use
+
+- For deterministic image processing nodes (blur, resize, color correction, compositing)
+  where the output should always be visually identical given the same input.
+- NOT suitable for non-deterministic outputs (diffusion, random noise without fixed seed).
+
+### Tips
+
+- Use `delta=0.0` for pixel-exact operations (crop, flip, solid color generation).
+- Use `delta=0.05` (default) for operations with minor floating-point variance.
+- Use `delta=0.1–0.15` for operations where small visual differences are acceptable.
+- Only the first image in the batch is hashed.
+
+### Example
+
+```
+[TestImageGenerator(image_type="synthetic_benchmark")] → [SharpenNode] → [AssertImageMatch(perceptual_hash="", delta=0.05)]
+```
+On first run, capture the hash. On subsequent runs, it validates consistency.
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -188,6 +234,44 @@ class AssertImageMatch(io.ComfyNode):
 
 class AssertContainsColor(io.ComfyNode):
     """Output node that checks if an image contains a specific color"""
+
+    SKILL_DOC = """
+Checks that an image contains at least `min_pixels` pixels matching a target color
+within a tolerance. Useful for verifying that specific visual elements are present
+(e.g. colored skeleton lines, segmentation regions, color fills). This is an output node.
+
+### Inputs
+
+- `image` (IMAGE) — The image tensor to check. Format: `[B,H,W,C]`.
+- `color` (STRING) — Target color in hex (`"#FF0000"`, `"FF0000"`) or RGB tuple
+  (`"255,0,0"`, `"(255, 0, 0)"`, `"[255,0,0]"`). Default: `"#FF0000"`.
+- `tolerance` (INT) — Maximum Euclidean distance in RGB space for a pixel to count as
+  matching. `0` = exact match only, `10` = slight variation allowed, `50` = generous.
+  Range: 0–255. Default: `10`.
+- `min_pixels` (INT) — Minimum number of matching pixels required. Range: 1–1000000.
+  Default: `1`.
+
+### When to Use
+
+- Verify OpenPose/skeleton outputs contain expected joint colors.
+- Check segmentation masks have the expected category colors.
+- Validate color correction nodes preserve or shift specific colors.
+- Verify that a compositing node placed a colored element correctly.
+
+### Tips
+
+- Uses Euclidean distance in RGB space: `sqrt((r1-r2)^2 + (g1-g2)^2 + (b1-b2)^2)`.
+- Only checks the first image in the batch.
+- Exits early once `min_pixels` is reached (fast for most cases).
+- Set `min_pixels` higher when checking for substantial regions, not single stray pixels.
+
+### Example
+
+Verify that a red channel extraction produces red pixels:
+```
+[TestImageGenerator(image_type="synthetic_benchmark")] → [ExtractRedChannel] → [AssertContainsColor(color="#FF0000", tolerance=10, min_pixels=100)]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:

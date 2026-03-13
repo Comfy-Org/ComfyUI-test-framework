@@ -4,6 +4,31 @@ from comfy_api.v0_0_2 import io
 class TestDefinition(io.ComfyNode):
     """Defines test metadata including name, GPU requirements, and timeout"""
 
+    SKILL_DOC = """
+Every test workflow MUST contain exactly one `TestDefinition` node. It captures metadata
+that the test runner (`comfyci`) uses to name, filter, and configure tests.
+
+This node has no connections — all inputs are socketless (configured via the UI/JSON only).
+It is an output node so it participates in execution.
+
+### Inputs
+
+- `name` — A short, descriptive test name (e.g. `"blur_preserves_dimensions"`). Used in
+  test runner output and CI reports.
+- `description` — Brief explanation of what the test verifies. Keep it to one sentence.
+- `requiresGPU` — Set to `true` only if the test genuinely needs a GPU to run. Tests with
+  `requiresGPU=false` run on every commit; GPU tests run less frequently due to cost.
+  Default: `false`.
+- `extraTime` — Additional timeout in seconds beyond the default 10s. Only increase if the
+  operation legitimately takes longer (e.g. model inference). Range: 0–3600. Default: `0`.
+
+### Usage Notes
+
+- The `TestDefinition` node is standalone — it does not connect to any other node.
+- It does not affect the workflow's execution graph; it only provides metadata.
+- If `requiresGPU` is `false` but the test fails without a GPU, update it to `true`.
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(

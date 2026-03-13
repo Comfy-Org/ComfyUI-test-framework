@@ -18,6 +18,40 @@ class AssertMaskCoverage(io.ComfyNode):
       - Circle mask at default size → coverage should be ~63%
     """
 
+    SKILL_DOC = """
+Checks that the percentage of non-zero pixels in a mask falls within an expected range.
+Coverage is defined as `(pixels > 0) / total_pixels * 100`. This is an output node.
+
+### Inputs
+
+- `mask` (MASK) — The mask tensor to validate. Format: `[B,H,W]` or `[H,W]`.
+- `min_coverage` (FLOAT) — Minimum acceptable coverage percentage. Range: 0–100.
+  Default: `0.0`.
+- `max_coverage` (FLOAT) — Maximum acceptable coverage percentage. Range: 0–100.
+  Default: `100.0`.
+
+### When to Use
+
+- Validate segmentation nodes produce masks of expected density (e.g. face segmentation
+  on a portrait should cover roughly 20–60%).
+- Verify threshold nodes produce expected fill amounts.
+- Check that mask inversion works (invert solid_white → 0% coverage).
+- Sanity-check mask generation nodes (circle → ~78%, half → 50%).
+
+### Tips
+
+- Coverage is calculated across the entire tensor (all batches combined).
+- Use wide ranges initially, then tighten as you understand the expected output.
+- Combine with `AssertMaskBinary` or `AssertMaskFuzzy` for more complete validation.
+
+### Example
+
+Verify a face segmentation mask covers a reasonable portion of the image:
+```
+[TestImageGenerator(image_type="face")] → [FaceSegmentation] → [AssertMaskCoverage(min_coverage=15.0, max_coverage=65.0)]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -104,6 +138,37 @@ class AssertMaskBinary(io.ComfyNode):
       - Gradient test mask → NOT binary (will fail, useful as a negative test)
     """
 
+    SKILL_DOC = """
+Verifies that ALL mask values are exactly `0.0` or `1.0` (hard mask). Fails if any
+pixel has an intermediate value. This is an output node.
+
+### Inputs
+
+- `mask` (MASK) — The mask tensor to validate. Format: `[B,H,W]` or `[H,W]`.
+
+### When to Use
+
+- After threshold nodes that should produce crisp 0/1 masks.
+- After boolean mask operations (AND, OR, XOR, NOT).
+- To verify mask generation nodes produce clean binary output.
+- As a negative test: feed a gradient mask to confirm it correctly fails (proving the
+  assertion works).
+
+### Tips
+
+- This check is strict: even a single pixel at 0.5 causes failure.
+- For soft-edge masks (blur, feather, anti-aliasing), use `AssertMaskFuzzy` instead.
+- The error reports sample non-binary values and total count for debugging.
+- On success, reports the percentage of `1.0` pixels (effective coverage).
+
+### Example
+
+Verify a threshold node produces a binary mask:
+```
+[TestMaskGenerator(mask_type="gradient_horizontal")] → [ThresholdMask(threshold=0.5)] → [AssertMaskBinary]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -178,6 +243,49 @@ class AssertMaskFuzzy(io.ComfyNode):
       - GaussianBlur on half_left → wide soft band at midpoint
       - MaskComposite blend → controlled transition zone
     """
+
+    SKILL_DOC = """
+Validates soft-edge masks by classifying pixels into three zones and asserting that the
+"soft" zone (grey boundary) stays within acceptable bounds. This is an output node.
+
+### Inputs
+
+- `mask` (MASK) — The mask tensor to validate. Format: `[B,H,W]` or `[H,W]`.
+- `edge_tolerance` (FLOAT) — Defines the boundary between "near 0/1" and "soft" zones.
+  Pixels in `[0, edge_tolerance]` are "near 0"; pixels in `[1-edge_tolerance, 1]` are
+  "near 1"; everything else is "soft". Range: 0.001–0.5. Default: `0.1`.
+- `max_soft_percentage` (FLOAT) — Maximum allowed percentage of soft (grey) pixels.
+  Range: 0–100. Default: `15.0`.
+
+### Recommended Thresholds
+
+| Use Case | `edge_tolerance` | `max_soft_percentage` |
+|----------|------------------|-----------------------|
+| Light feather (2–4px) | `0.1` | `5` |
+| Medium blur (5–10px) | `0.1` | `15` |
+| Heavy blur / Gaussian | `0.05` | `30` |
+| Anti-aliased edges | `0.1` | `10` |
+
+### When to Use
+
+- After blur or feather nodes to verify the soft region is controlled.
+- After anti-aliasing operations to confirm edge smoothing.
+- When you expect a mostly-binary mask with soft boundaries (not a fully soft gradient).
+- For nodes like `FeatherMask`, `GaussianBlur` applied to masks, `MaskComposite` blends.
+
+### Tips
+
+- If you expect a fully binary mask, use `AssertMaskBinary` instead.
+- If you just need coverage percentage, use `AssertMaskCoverage` instead.
+- Reports full breakdown of all three zones on both success and failure.
+
+### Example
+
+Verify a feather operation produces a controlled soft edge:
+```
+[TestMaskGenerator(mask_type="circle")] → [FeatherMask(amount=4)] → [AssertMaskFuzzy(edge_tolerance=0.1, max_soft_percentage=10)]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:

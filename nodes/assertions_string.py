@@ -14,6 +14,39 @@ class AssertStringContains(io.ComfyNode):
       - Metadata extractor → assert output contains expected EXIF key
     """
 
+    SKILL_DOC = """
+Verifies that a string contains an expected substring. Fails if the substring is not
+found. This is an output node.
+
+### Inputs
+
+- `text` (ANY) — The string to search in. Must be a string type.
+- `substring` (STRING) — The substring to search for. Must not be empty. Supports
+  multiline. Default: `""`.
+- `case_sensitive` (BOOLEAN) — Whether matching is case-sensitive. Default: `false`.
+
+### When to Use
+
+- Verify prompt builders inject expected tags (e.g. output contains `"masterpiece"`).
+- Check string concatenation includes both input strings.
+- Validate template substitution replaced placeholders with expected values.
+- Confirm metadata extractors return expected keys or values.
+
+### Tips
+
+- Case-insensitive by default — set `case_sensitive=true` when exact casing matters.
+- Error message shows a preview of the text (truncated to 200 chars) for debugging.
+- For checking that a substring is NOT present, use `AssertStringNotContains` instead.
+- For exact full-string matching, use `AssertStringMatch` with `mode="exact"`.
+
+### Example
+
+Verify a quality tag injector adds expected text:
+```
+[PromptBuilder(input="a cat")] → [AssertStringContains(substring="masterpiece")]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -94,6 +127,55 @@ class AssertStringNotContains(io.ComfyNode):
       - Template resolver → regex mode, r"\\{\\w+\\}" to catch unresolved placeholders
       - Multi-pattern ban → regex mode, r"(badword1|badword2|badword3)"
     """
+
+    SKILL_DOC = """
+Verifies that a string does NOT contain a forbidden pattern. Supports three matching
+modes. This is an output node.
+
+### Inputs
+
+- `text` (ANY) — The string to check. Must be a string type.
+- `pattern` (STRING) — The forbidden pattern. Ignored in `llm_guard` mode. Supports
+  multiline. Default: `""`.
+- `mode` (COMBO) — Matching strategy:
+  - `"literal"` — Simple substring search. Fails if `pattern` appears anywhere.
+  - `"regex"` — Python regex via `re.search()`. Fails if pattern matches anywhere.
+  - `"llm_guard"` — Built-in patterns (ignores `pattern` field). Catches:
+    - Empty/whitespace-only output
+    - Refusal phrases: "I cannot", "I can't", "I'm sorry", "I apologize",
+      "I'm unable to", "I am unable to", "I'm not able to"
+    - AI disclaimers: "as an AI", "as a language model"
+    - Error markers: "error:", "exception:", "traceback", "syntax error", "runtime error"
+  Default: `"literal"`.
+- `case_sensitive` (BOOLEAN) — Controls case sensitivity for `literal` and `regex` modes.
+  `llm_guard` is always case-insensitive. Default: `false`.
+
+### When to Use
+
+- **`llm_guard` mode**: As a baseline assertion for ANY LLM/AI text generation node.
+  Catches the most common failure modes in a single assertion.
+- **`literal` mode**: Check for a specific banned word or phrase.
+- **`regex` mode**: Check for unresolved template placeholders (`r"\\{\\w+\\}"`),
+  multiple banned patterns (`r"(word1|word2|word3)"`), or structural issues.
+
+### Tips
+
+- For LLM nodes, layer `llm_guard` with `AssertStringLength` for comprehensive coverage.
+- Error messages include ±50 chars of context around the match for debugging.
+- In `llm_guard` mode, the `pattern` field is completely ignored.
+
+### Example
+
+Baseline assertion for an LLM captioning node:
+```
+[ImageCaptioner(image=...)] → [AssertStringNotContains(mode="llm_guard")]
+```
+
+Check that a template resolver removed all placeholders:
+```
+[TemplateResolver(template="{subject} in {style}")] → [AssertStringNotContains(pattern="{", mode="literal")]
+```
+"""
 
     LLM_GUARD_PATTERNS = [
         r"^\s*$",
@@ -248,6 +330,39 @@ class AssertStringLength(io.ComfyNode):
       - Filename generator → expect 10-100 chars
     """
 
+    SKILL_DOC = """
+Checks that a string's length (in characters) falls within `[min_length, max_length]`.
+Catches empty, truncated, or runaway outputs. This is an output node.
+
+### Inputs
+
+- `text` (ANY) — The string to measure. Must be a string type.
+- `min_length` (INT) — Minimum acceptable length. Range: 0–10000000. Default: `0`.
+- `max_length` (INT) — Maximum acceptable length. Range: 0–10000000. Default: `10000`.
+
+### When to Use
+
+- For non-deterministic outputs (LLM, randomized text) where exact content varies
+  but length should be reasonable.
+- Catch empty outputs (`min_length=1`).
+- Catch degenerate/runaway generation (`max_length=5000`).
+- Validate text summarizers produce shorter output than input.
+- Use alongside `AssertStringNotContains(mode="llm_guard")` for comprehensive LLM testing.
+
+### Tips
+
+- Set `min_length=1` to catch empty string failures.
+- The error message includes a preview of the text (truncated to 100 chars).
+- For exact length matching, set `min_length` = `max_length`.
+
+### Example
+
+Verify an LLM caption produces substantive output:
+```
+[ImageCaptioner(image=...)] → [AssertStringLength(min_length=20, max_length=500)]
+```
+"""
+
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
@@ -331,6 +446,49 @@ class AssertStringMatch(io.ComfyNode):
       - Wildcard resolver → regex r"\\w+ sky" to verify structure
       - Filename builder → regex r".+_\\d{4}\\.png" to verify format
     """
+
+    SKILL_DOC = """
+Checks that a string matches an expected pattern exactly or via regex. This is an
+output node.
+
+### Inputs
+
+- `text` (ANY) — The string to validate. Must be a string type.
+- `pattern` (STRING) — The expected value or regex pattern. Supports multiline.
+  Default: `""`.
+- `mode` (COMBO) — Matching strategy:
+  - `"exact"` — Full string equality (entire string must match).
+  - `"regex"` — Python `re.fullmatch()` (entire string must match the regex pattern).
+  Default: `"exact"`.
+- `case_sensitive` (BOOLEAN) — Controls case sensitivity. Default: `false`.
+
+### When to Use
+
+- **`exact` mode**: For deterministic string operations where the entire output is known
+  (string replace, concatenation, formatting, fixed templates).
+- **`regex` mode**: For validating output structure when exact content varies
+  (wildcard resolvers, timestamp generators, filename builders).
+
+### Tips
+
+- Uses `re.fullmatch()` in regex mode — the ENTIRE string must match the pattern,
+  not just a substring. Use `AssertStringContains` for substring checks.
+- Case-insensitive by default in both modes.
+- Error messages show text preview (truncated to 200 chars) for debugging.
+- For just checking a substring is present, prefer `AssertStringContains`.
+
+### Example
+
+Verify a string replace operation:
+```
+[StringReplace(text="a photo of a dog", find="dog", replace="cat")] → [AssertStringMatch(pattern="a photo of a cat", mode="exact")]
+```
+
+Verify a date formatter produces correct format:
+```
+[DateFormatter] → [AssertStringMatch(pattern="\\d{4}-\\d{2}-\\d{2}", mode="regex")]
+```
+"""
 
     @classmethod
     def define_schema(cls) -> io.Schema:

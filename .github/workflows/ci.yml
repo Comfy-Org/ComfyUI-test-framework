@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  skill-docs:
+    name: Validate skill docs generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run generate_skill_docs.py
+        run: |
+          stderr_file=$(mktemp)
+          python scripts/generate_skill_docs.py > /dev/null 2>"$stderr_file"
+          if [ -s "$stderr_file" ]; then
+            cat "$stderr_file"
+            echo "::error::generate_skill_docs.py produced warnings (missing or uncategorized nodes)"
+            exit 1
+          fi

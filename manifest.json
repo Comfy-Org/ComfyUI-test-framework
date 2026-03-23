@@ -1,0 +1,121 @@
+{
+  "AssertContainsColor": {
+    "display_name": "Assert Contains Color",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Checks if image contains pixels of a specific color (useful for openpose, segmentation)",
+    "module": "assertions_image"
+  },
+  "AssertEqual": {
+    "display_name": "Assert Equal",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Checks if two inputs are equal, throws error if not",
+    "module": "assertions_general"
+  },
+  "AssertExecuted": {
+    "display_name": "Assert Executed",
+    "category": "testing",
+    "is_output_node": false,
+    "description": "Pass-through node that verifies execution occurred (not cached)",
+    "module": "assertions_general"
+  },
+  "AssertImageMatch": {
+    "display_name": "Assert Image Match",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Compare image against perceptual hash and fail if difference exceeds threshold",
+    "module": "assertions_image"
+  },
+  "AssertInRange": {
+    "display_name": "Assert In Range",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Checks if all tensor values are within min/max bounds",
+    "module": "assertions_general"
+  },
+  "AssertMaskBinary": {
+    "display_name": "Assert Mask Binary",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that all mask values are exactly 0 or 1 (hard mask)",
+    "module": "assertions_mask"
+  },
+  "AssertMaskCoverage": {
+    "display_name": "Assert Mask Coverage",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that mask coverage (% of non-zero pixels) is within an expected range",
+    "module": "assertions_mask"
+  },
+  "AssertMaskFuzzy": {
+    "display_name": "Assert Mask Fuzzy",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that a soft-edge mask has a controlled amount of grey boundary pixels",
+    "module": "assertions_mask"
+  },
+  "AssertNotEqual": {
+    "display_name": "Assert Not Equal",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Checks if two inputs are not equal, throws error if they are equal",
+    "module": "assertions_general"
+  },
+  "AssertStringContains": {
+    "display_name": "Assert String Contains",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that a string contains an expected substring",
+    "module": "assertions_string"
+  },
+  "AssertStringLength": {
+    "display_name": "Assert String Length",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that a string's length is within min/max bounds",
+    "module": "assertions_string"
+  },
+  "AssertStringMatch": {
+    "display_name": "Assert String Match",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that a string matches a pattern (exact or regex)",
+    "module": "assertions_string"
+  },
+  "AssertStringNotContains": {
+    "display_name": "Assert String Not Contains",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Check that a string does NOT contain a forbidden pattern (literal, regex, or built-in LLM guard)",
+    "module": "assertions_string"
+  },
+  "AssertTensorShape": {
+    "display_name": "Assert Tensor Shape",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Checks if tensor has expected dimensions. Supports 3D [B,H,W] masks and 4D [B,H,W,C] images. Use -1 to accept any value, or set channels=-1 for 3D tensors.",
+    "module": "assertions_general"
+  },
+  "TestDefinition": {
+    "display_name": "Test Definition",
+    "category": "testing",
+    "is_output_node": true,
+    "description": "Define test metadata: name, GPU requirements, and extra execution time",
+    "module": "test_definition"
+  },
+  "TestImageGenerator": {
+    "display_name": "Test Image Generator",
+    "category": "testing",
+    "is_output_node": false,
+    "description": "Generate test images: solid colors, noise, face, synthetic benchmark pattern, or video benchmark pattern",
+    "module": "generators"
+  },
+  "TestMaskGenerator": {
+    "display_name": "Test Mask Generator",
+    "category": "testing",
+    "is_output_node": false,
+    "description": "Generate test masks: solid, circle, gradient, checkerboard, noise, or half masks",
+    "module": "generators"
+  }
+}
